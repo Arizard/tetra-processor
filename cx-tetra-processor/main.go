@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/arizard/tetra-processor/resource"
 	"os"
 	"strings"
 
@@ -26,10 +27,10 @@ import (
 type Response events.APIGatewayProxyResponse
 
 // Handler is our lambda handler invoked by the `lambda.Start` function call
-func Handler(ctx context.Context, request events.S3Event) {
+func Handler(_ context.Context, request events.S3Event) {
 	configBucket := os.Getenv("CONFIG_BUCKET")
 	tetraConfigKey := os.Getenv("TETRA_CONFIG_KEY")
-	// tesseractConfigKey := os.Getenv("TESSERACT_CONFIG_KEY")
+	tetraProcessorConfigKey := os.Getenv("TETRA_PROCESSOR_CONFIG_KEY")
 	outputBucket := os.Getenv("OUTPUT_BUCKET")
 	outputNamePattern := os.Getenv("OUTPUT_NAME_PATTERN")
 
@@ -55,7 +56,20 @@ func Handler(ctx context.Context, request events.S3Event) {
 		companyKey, fileName := keySplit[0], keySplit[1]
 		csvFileKey := record.S3.Object.Key
 
-		csvOutputKey := fmt.Sprintf(outputNamePattern, companyKey, fileName)
+		tetraProcessorConfigPath := fmt.Sprintf(
+			"%s/%s",
+			companyKey,
+			tetraProcessorConfigKey,
+		)
+
+		metaCfg := resource.GetAWSTetraMetaConfig(
+			configBucket,
+			tetraProcessorConfigPath,
+			svc,
+		)
+
+		destFileName := fmt.Sprintf(metaCfg.DestFileNamePattern, fileName)
+		csvOutputKey := fmt.Sprintf(outputNamePattern, companyKey, destFileName)
 		tetraConfigPath := fmt.Sprintf("%s/%s", companyKey, tetraConfigKey)
 
 		stringCSVLoader := factory.BuildAWSCSVLoader(
@@ -83,7 +97,11 @@ func Handler(ctx context.Context, request events.S3Event) {
 
 func main() {
 	flag.Parse()
-	flag.Set("logtostderr", "1")
-	glog.Infof("cx-tetra-processor init\n")
+	if err := flag.Set("logtostderr", "1"); err != nil {
+		glog.Fatalf(
+			"error: could not force flag '-logtostderr' (%s)",
+			err,
+		)
+	}
 	lambda.Start(Handler)
 }
