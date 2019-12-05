@@ -76,6 +76,7 @@ func Handler(_ context.Context, request events.S3Event) {
 			tetraBucket,
 			csvFileKey,
 			svc,
+			factory.BuildNullDecrypt(),
 		)
 
 		stringCSVSaver := factory.BuildAWSCSVSaver(
