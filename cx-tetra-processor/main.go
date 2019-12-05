@@ -4,9 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/arizard/tetra-processor/resource"
 	"os"
 	"strings"
+
+	"github.com/arizard/tetra-processor/resource"
 
 	"github.com/arizard/tetra-processor/factory"
 	"github.com/arizard/tetra-processor/usecase"
@@ -29,6 +30,7 @@ type Response events.APIGatewayProxyResponse
 // Handler is our lambda handler invoked by the `lambda.Start` function call
 func Handler(_ context.Context, request events.S3Event) {
 	configBucket := os.Getenv("CONFIG_BUCKET")
+	tesseractConfigKey := os.Getenv("TESSERACT_CONFIG_KEY")
 	tetraConfigKey := os.Getenv("TETRA_CONFIG_KEY")
 	tetraProcessorConfigKey := os.Getenv("TETRA_PROCESSOR_CONFIG_KEY")
 	outputBucket := os.Getenv("OUTPUT_BUCKET")
@@ -71,12 +73,63 @@ func Handler(_ context.Context, request events.S3Event) {
 		destFileName := fmt.Sprintf(metaCfg.DestFileNamePattern, fileName)
 		csvOutputKey := fmt.Sprintf(outputNamePattern, companyKey, destFileName)
 		tetraConfigPath := fmt.Sprintf("%s/%s", companyKey, tetraConfigKey)
+		tesseractConfigPath := fmt.Sprintf(
+			"%s/%s",
+			companyKey,
+			tesseractConfigKey,
+		)
+
+		tesseractConfig := resource.GetAWSTesseractConfig(
+			configBucket,
+			tesseractConfigPath,
+			svc,
+		)
+
+		decryptFunc := factory.BuildNullDecrypt()
+		glog.Infof("config: %+v\n", tesseractConfig)
+		if tesseractConfig.Inbound.Action == "decrypt" {
+			if tesseractConfig.Inbound.Encryption == "" {
+				glog.Fatal("error: 'encryption' not provided in config")
+			}
+			if tesseractConfig.Inbound.PrivateKeyFileName == "" {
+				glog.Fatal(
+					"error: 'privateKeyFileName' not provided in config",
+				)
+			}
+			privateKeyPath := fmt.Sprintf(
+				"%s/%s",
+				companyKey,
+				tesseractConfig.Inbound.PrivateKeyFileName,
+			)
+			privateKeyOutput, err := svc.GetObject(
+				&s3.GetObjectInput{
+					Bucket: &configBucket,
+					Key:    &privateKeyPath,
+				},
+			)
+			if err != nil {
+				glog.Fatalf("error: could not retrieve private key from s3 (%s)", err)
+			}
+			decryptFunc = factory.BuildPGPDecrypt(
+				privateKeyOutput.Body,
+				[]byte(tesseractConfig.Inbound.Passphrase),
+			)
+			csvOutputKey = fmt.Sprintf(
+				outputNamePattern,
+				companyKey,
+				fmt.Sprintf(
+					"decrypted_%s",
+					strings.TrimRight(destFileName, ".gpg"),
+				),
+			)
+
+		}
 
 		stringCSVLoader := factory.BuildAWSCSVLoader(
 			tetraBucket,
 			csvFileKey,
 			svc,
-			factory.BuildNullDecrypt(),
+			decryptFunc,
 		)
 
 		stringCSVSaver := factory.BuildAWSCSVSaver(

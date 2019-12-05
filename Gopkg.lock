@@ -92,6 +92,22 @@
   revision = "de8848e004dd33dc07a2947b3d76f618a7fc7ef1"
   version = "v1.8.1"
 
+[[projects]]
+  branch = "master"
+  digest = "1:97fc4d7b02ee1f310bb10f8ce213ae98190119ec8ff4b8aeb928766053405be8"
+  name = "golang.org/x/crypto"
+  packages = [
+    "cast5",
+    "openpgp",
+    "openpgp/armor",
+    "openpgp/elgamal",
+    "openpgp/errors",
+    "openpgp/packet",
+    "openpgp/s2k",
+  ]
+  pruneopts = ""
+  revision = "86a70503ff7e82ffc18c7b0de83db35da4791e6a"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
@@ -104,6 +120,8 @@
     "github.com/aws/aws-sdk-go/service/s3",
     "github.com/golang/glog",
     "github.com/magiconair/properties/assert",
+    "golang.org/x/crypto/openpgp",
+    "golang.org/x/crypto/openpgp/armor",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
